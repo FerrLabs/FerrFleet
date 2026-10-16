@@ -1,0 +1,19 @@
+codecov:
+  notify:
+    after_n_builds: 1
+    wait_for_ci: false
+
+coverage:
+  notify:
+    email:
+      disabled: true
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+ignore:
+  - '.github/**'

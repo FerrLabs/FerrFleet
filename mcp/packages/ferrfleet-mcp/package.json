@@ -1,0 +1,41 @@
+{
+  "name": "@ferrfleet/mcp",
+  "version": "10.13.0",
+  "description": "Model Context Protocol server for FerrFleet: agents, runs, skills",
+  "license": "MPL-2.0",
+  "type": "module",
+  "bin": {
+    "ferrfleet-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "ferrlabs",
+    "ferrfleet",
+    "agents",
+    "model-context-protocol"
+  ],
+  "dependencies": {
+    "@ferrlabs/mcp-core": "^10.13.0",
+    "zod": "^4.3.6"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FerrLabs/FerrFleet.git",
+    "directory": "mcp/packages/ferrfleet-mcp"
+  }
+}

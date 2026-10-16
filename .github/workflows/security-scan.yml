@@ -1,0 +1,24 @@
+name: Security scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    name: Secrets + CVE
+    uses: FerrLabs/.github/.github/workflows/reusable-security-scan.yml@9796e976e6b1a071578aed08b164fb483bf01a86 # main
+    secrets: inherit
