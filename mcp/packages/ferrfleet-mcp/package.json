@@ -1,6 +1,6 @@
 {
   "name": "@ferrfleet/mcp",
-  "version": "10.13.0",
+  "version": "10.13.1",
   "description": "Model Context Protocol server for FerrFleet: agents, runs, skills",
   "license": "MPL-2.0",
   "type": "module",
