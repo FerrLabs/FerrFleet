@@ -62,7 +62,7 @@ jobs:
       matrix:
         include:
           - package: "@ferrfleet/mcp"
-            image: ferrfleet-mcp
+            image: ferrfleet-mcp-server
     permissions:
       contents: read
       packages: write
