@@ -16,7 +16,7 @@ Add to your MCP client configuration (Claude Code, Cursor, etc.):
 }
 ```
 
-The first tool call that needs auth opens a browser for an OAuth loopback flow and saves the token. To skip it (CI, headless), set `FERRLABS_API_TOKEN`. Details in the [FerrLabs MCP README](https://github.com/FerrLabs/MCP#how-auth-resolution-works).
+The first tool call that needs auth opens a browser for an OAuth loopback flow and saves the token. To skip it (CI, headless), set `FERRLABS_API_TOKEN`. Details in the [FerrLabs MCP README](https://github.com/FerrLabs/FerrLabs/blob/main/packages/mcp/README.md#how-auth-resolution-works).
 
 ## Tools
 
@@ -55,7 +55,7 @@ Every tool except `list_ferrfleet_orgs` takes an optional `org_id` (UUID) that s
 | `FERRFLEET_API_VERSION` | Contract version sent as `x-ferrfleet-api-version` by `@ferrfleet/mcp`.                                                                          | `2026-08-04`                |
 | `FERRFLEET_ORG_ID`      | Default organization UUID sent as `x-ferrfleet-org` by `@ferrfleet/mcp` when a tool call has no `org_id`. Must be a UUID; unset sends no header. |                             |
 
-Shared variables (token, OAuth, host allowlist, HTTP transport, output cap) are read by [`@ferrlabs/mcp-core`](https://github.com/FerrLabs/MCP/tree/main/packages/mcp-core) and documented in the [FerrLabs MCP README](https://github.com/FerrLabs/MCP#configuration).
+Shared variables (token, OAuth, host allowlist, HTTP transport, output cap) are read by [`@ferrlabs/mcp-core`](https://github.com/FerrLabs/FerrLabs/tree/main/packages/mcp-core) and documented in the [FerrLabs MCP README](https://github.com/FerrLabs/FerrLabs/blob/main/packages/mcp/README.md#configuration).
 
 ## Development
 
