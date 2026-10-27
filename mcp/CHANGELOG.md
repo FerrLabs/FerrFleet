@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.13.3] - 2026-10-27
+
+### Bug Fixes
+
+- fix(deps): override body-parser and raise fast-uri floor for audit (#15)
+
 ## [10.13.2] - 2026-10-21
 
 ### Bug Fixes
