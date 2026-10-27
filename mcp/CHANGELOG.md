@@ -4,6 +4,16 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.14.0] - 2026-10-27
+
+### Features
+
+- feat(mcp): add workflow and event rule tools (#17)
+
+### Bug Fixes
+
+- fix(deps): update dependency @ferrlabs/mcp-core to ^10.14.3 (#14)
+
 ## [10.13.3] - 2026-10-27
 
 ### Bug Fixes
