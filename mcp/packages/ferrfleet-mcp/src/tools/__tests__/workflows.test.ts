@@ -225,6 +225,7 @@ describe('workflow and event rule tools', () => {
     it('create_workflow requires a name of 1 to 100 characters', () => {
       expect(accepts('create_workflow', 'name', undefined)).toBe(false);
       expect(accepts('create_workflow', 'name', '')).toBe(false);
+      expect(accepts('create_workflow', 'name', '   ')).toBe(false);
       expect(accepts('create_workflow', 'name', 'a'.repeat(101))).toBe(false);
       expect(accepts('create_workflow', 'enabled', undefined)).toBe(true);
     });
@@ -326,6 +327,7 @@ describe('workflow and event rule tools', () => {
 
       it('rejects an unknown dedup mode and over-long instructions', () => {
         expect(ok({ action: 'run', dedup: 'always' })).toBe(false);
+        expect(ok({ action: 'run', agent_id: '' })).toBe(false);
         expect(ok({ action: 'run', instructions: 'a'.repeat(4001) })).toBe(false);
       });
 

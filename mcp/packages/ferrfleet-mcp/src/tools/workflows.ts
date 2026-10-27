@@ -38,7 +38,7 @@ const stepSchema = z.strictObject({
 });
 
 const workflowFields = {
-  name: z.string().min(1).max(100).describe('Workflow name'),
+  name: z.string().trim().min(1).max(100).describe('Workflow name'),
   enabled: z.boolean().optional().describe('Whether the workflow can run; defaults to true'),
   steps: z
     .array(stepSchema)
