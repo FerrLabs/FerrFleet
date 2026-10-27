@@ -46,7 +46,7 @@ const conditionsSchema = z
 
 const outcomeSchema = z.discriminatedUnion('action', [
   z.strictObject({
-    action: z.literal('run'),
+    agent_id: z.string().min(1).optional().describe('Agent to run instead of the repository-bound one'),
     agent_id: z.string().optional().describe('Agent to run instead of the repository-bound one'),
     instructions: z.string().max(4000).optional().describe("Appended to the agent's prompt"),
     dedup: z
