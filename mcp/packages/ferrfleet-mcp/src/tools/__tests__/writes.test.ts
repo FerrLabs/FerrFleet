@@ -49,6 +49,7 @@ function lastCall(): {
 const FLEET = 'https://api.ferrfleet.com';
 const ORG_ID = '3f0c6a52-8d1e-4b7a-9c2f-5e6d7a8b9c01';
 const POOL_ID = '0192f3a4-5b6c-7d8e-9f01-23456789abcd';
+const STEP = { id: 'a', agent_id: 'bot', position: { x: 0, y: 0 } };
 const ENV_ORG_ID = '7a1d9e34-2b5c-4f80-8e6a-1c3b5d7f9a02';
 
 describe('ferrfleet tools', () => {
@@ -73,6 +74,10 @@ describe('ferrfleet tools', () => {
     const { registerConnectorTools } = await import('../connectors.js');
     registerMarketplaceTools(mockServer);
     registerConnectorTools(mockServer);
+    const { registerWorkflowTools } = await import('../workflows.js');
+    const { registerEventRuleTools } = await import('../event-rules.js');
+    registerWorkflowTools(mockServer);
+    registerEventRuleTools(mockServer);
   });
 
   it('every call goes to the FerrFleet API', async () => {
@@ -479,6 +484,20 @@ describe('ferrfleet tools', () => {
       ['list_runs', {}],
       ['get_run', { run_id: 'r1' }],
       ['get_run_transcript', { run_id: 'r1' }],
+      ['list_workflows', {}],
+      ['get_workflow', { workflow_id: ENV_ORG_ID }],
+      ['create_workflow', { name: 'W', steps: [STEP] }],
+      ['update_workflow', { workflow_id: ENV_ORG_ID, name: 'W', steps: [STEP] }],
+      ['delete_workflow', { workflow_id: ENV_ORG_ID }],
+      ['run_workflow', { workflow_id: ENV_ORG_ID }],
+      ['list_workflow_runs', { workflow_id: ENV_ORG_ID }],
+      ['get_workflow_run', { run_id: ENV_ORG_ID }],
+      ['list_event_rules', {}],
+      ['create_event_rule', { name: 'R', outcome: { action: 'skip', reason: 'noise' } }],
+      ['update_event_rule', { rule_id: ENV_ORG_ID, name: 'R', outcome: { action: 'run' } }],
+      ['delete_event_rule', { rule_id: ENV_ORG_ID }],
+      ['reorder_event_rules', { ids: [ENV_ORG_ID] }],
+      ['list_event_decisions', {}],
     ];
 
     it.each(CALLS)('%s sends the org_id param as x-ferrfleet-org', async (name, params) => {
