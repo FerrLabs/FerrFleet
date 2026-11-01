@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getToken, type McpServer, toToolText } from '@ferrlabs/mcp-core';
 import { fleetRequest, orgIdSchema } from '../api-base.js';
+import { reply } from './reply.js';
 
 interface Run {
   id: string;
@@ -79,6 +80,25 @@ export function registerRunTools(server: McpServer) {
           },
         ],
       };
+    },
+  );
+
+  server.tool(
+    'retry_run',
+    'Retry a failed or timed out FerrFleet run of any capability: creates the next attempt as a new run and returns its id, the id of the run it retries and the attempt number. Refused with 409 while the run or another run of the same commit is in flight, when the run was already retried, and for a run of an external agent. Requires a FerrFleet API that has POST /runs/{id}/retry.',
+    {
+      run_id: z.string().min(1).describe('Id of the failed or timed out run to retry'),
+      org_id: orgIdSchema,
+    },
+    async ({ run_id, org_id }) => {
+      const token = await getToken();
+      return reply(
+        await fleetRequest(`/runs/${encodeURIComponent(run_id)}/retry`, {
+          token,
+          orgId: org_id,
+          method: 'POST',
+        }),
+      );
     },
   );
 }

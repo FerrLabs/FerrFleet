@@ -109,6 +109,53 @@ describe('ferrfleet tools', () => {
     expect(lastCall().body).toEqual({ input: {}, reason: null });
   });
 
+  it('retry_run posts to the retry sub-resource of the run, without a body', async () => {
+    await handlers.get('retry_run')!({ run_id: 'run-9' });
+
+    const call = lastCall();
+    expect(call.url).toBe(`${FLEET}/runs/run-9/retry`);
+    expect(call.method).toBe('POST');
+    expect(call.body).toBeUndefined();
+  });
+
+  it('retry_run escapes the run id so it cannot climb the path', async () => {
+    await handlers.get('retry_run')!({ run_id: '../agents' });
+    expect(lastCall().url).toBe(`${FLEET}/runs/..%2Fagents/retry`);
+  });
+
+  it('retry_run requires a run id', () => {
+    const runId = schemas.get('retry_run')!.run_id;
+    expect(runId.safeParse(undefined).success).toBe(false);
+    expect(runId.safeParse('').success).toBe(false);
+    expect(runId.safeParse('run-9').success).toBe(true);
+  });
+
+  it('retry_run returns the new attempt from the API', async () => {
+    mockFetch.mockResolvedValue(ok({ id: 'run-10', retry_of: 'run-9', attempt: 2 }));
+
+    const result = await handlers.get('retry_run')!({ run_id: 'run-9' });
+
+    expect(JSON.parse(result.content[0].text!)).toEqual({
+      id: 'run-10',
+      retry_of: 'run-9',
+      attempt: 2,
+    });
+  });
+
+  it('retry_run does not swallow a refusal from the API', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      statusText: 'Conflict',
+      text: () => Promise.resolve(JSON.stringify({ error: 'this run was already retried' })),
+      json: () => Promise.resolve({ error: 'this run was already retried' }),
+    } as unknown as Response);
+
+    await expect(handlers.get('retry_run')!({ run_id: 'run-9' })).rejects.toThrow(
+      'this run was already retried',
+    );
+  });
+
   it('get_run_transcript reads the transcript sub-resource', async () => {
     await handlers.get('get_run_transcript')!({ run_id: 'run-9' });
 
@@ -483,6 +530,7 @@ describe('ferrfleet tools', () => {
       ['update_connector', { connector_id: 'c1', name: 'Gh' }],
       ['list_runs', {}],
       ['get_run', { run_id: 'r1' }],
+      ['retry_run', { run_id: 'r1' }],
       ['get_run_transcript', { run_id: 'r1' }],
       ['list_workflows', {}],
       ['get_workflow', { workflow_id: ENV_ORG_ID }],
