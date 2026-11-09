@@ -17,7 +17,7 @@ interface FleetRequestOptions {
   method?: string;
   body?: unknown;
   token: string;
-  orgId?: string | undefined;
+  orgId?: string;
 }
 
 function orgHeader(orgId: string | undefined): Record<string, string> {
