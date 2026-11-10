@@ -6,6 +6,7 @@ try {
   await runMcp({
     name: 'ferrfleet',
     version: readPackageVersion(import.meta.url),
+    scopes: ['agents:read', 'agents:run'],
     register,
   });
 } catch (err: unknown) {
