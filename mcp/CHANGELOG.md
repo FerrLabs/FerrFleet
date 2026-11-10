@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.16.0] - 2026-11-10
+
+### Features
+
+- feat(mcp): move_run_to_front tool and a status filter on list_runs (#34)
+
 ## [10.15.3] - 2026-11-10
 
 ### Bug Fixes
