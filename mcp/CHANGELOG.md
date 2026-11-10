@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.15.2] - 2026-11-10
+
+### Refactoring
+
+- refactor: apply sonar quick wins (#30)
+
 ## [10.15.1] - 2026-11-01
 
 ### Bug Fixes
