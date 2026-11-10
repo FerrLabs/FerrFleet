@@ -156,6 +156,49 @@ describe('ferrfleet tools', () => {
     );
   });
 
+  it('move_run_to_front posts to the move-to-front sub-resource, without a body', async () => {
+    await handlers.get('move_run_to_front')!({ run_id: 'run-9' });
+
+    const call = lastCall();
+    expect(call.url).toBe(`${FLEET}/runs/run-9/move-to-front`);
+    expect(call.method).toBe('POST');
+    expect(call.body).toBeUndefined();
+  });
+
+  it('move_run_to_front escapes the run id so it cannot climb the path', async () => {
+    await handlers.get('move_run_to_front')!({ run_id: '../agents' });
+    expect(lastCall().url).toBe(`${FLEET}/runs/..%2Fagents/move-to-front`);
+  });
+
+  it('move_run_to_front requires a run id', () => {
+    const runId = schemas.get('move_run_to_front')!.run_id;
+    expect(runId.safeParse(undefined).success).toBe(false);
+    expect(runId.safeParse('').success).toBe(false);
+    expect(runId.safeParse('run-9').success).toBe(true);
+  });
+
+  it('move_run_to_front returns the API answer', async () => {
+    mockFetch.mockResolvedValue(ok({ line: 'pool', moved_ahead_of: 3 }));
+
+    const result = await handlers.get('move_run_to_front')!({ run_id: 'run-9' });
+
+    expect(JSON.parse(result.content[0].text!)).toEqual({ line: 'pool', moved_ahead_of: 3 });
+  });
+
+  it('move_run_to_front does not swallow a refusal from the API', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      statusText: 'Conflict',
+      text: () => Promise.resolve(JSON.stringify({ error: 'run is not waiting' })),
+      json: () => Promise.resolve({ error: 'run is not waiting' }),
+    } as unknown as Response);
+
+    await expect(handlers.get('move_run_to_front')!({ run_id: 'run-9' })).rejects.toThrow(
+      'run is not waiting',
+    );
+  });
+
   it('get_run_transcript reads the transcript sub-resource', async () => {
     await handlers.get('get_run_transcript')!({ run_id: 'run-9' });
 
@@ -172,6 +215,23 @@ describe('ferrfleet tools', () => {
   it('list_runs omits the query string entirely when no limit is given', async () => {
     await handlers.get('list_runs')!({});
     expect(lastCall().url).toBe(`${FLEET}/runs`);
+  });
+
+  it('list_runs passes status as a query parameter ahead of limit', async () => {
+    await handlers.get('list_runs')!({ status: 'pending', limit: 10 });
+    expect(lastCall().url).toBe(`${FLEET}/runs?status=pending&limit=10`);
+  });
+
+  it('list_runs sends status alone when no limit is given', async () => {
+    await handlers.get('list_runs')!({ status: 'queued' });
+    expect(lastCall().url).toBe(`${FLEET}/runs?status=queued`);
+  });
+
+  it('rejects a run status the API does not know', () => {
+    const status = schemas.get('list_runs')!.status;
+    expect(status.safeParse(undefined).success).toBe(true);
+    expect(status.safeParse('pending').success).toBe(true);
+    expect(status.safeParse('waiting').success).toBe(false);
   });
 
   it('escapes an agent id so it cannot climb the path', async () => {
@@ -531,6 +591,7 @@ describe('ferrfleet tools', () => {
       ['list_runs', {}],
       ['get_run', { run_id: 'r1' }],
       ['retry_run', { run_id: 'r1' }],
+      ['move_run_to_front', { run_id: 'r1' }],
       ['get_run_transcript', { run_id: 'r1' }],
       ['list_workflows', {}],
       ['get_workflow', { workflow_id: ENV_ORG_ID }],

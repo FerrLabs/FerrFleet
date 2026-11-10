@@ -11,7 +11,22 @@ interface Run {
   finished_at: string | null;
   triggered_by: string;
   created_at: string;
+  repo: string | null;
+  pr_number: number | null;
+  queue_position: number | null;
 }
+
+const RUN_STATUSES = [
+  'pending',
+  'running',
+  'completed',
+  'failed',
+  'timeout',
+  'cancelled',
+  'expired',
+  'queued',
+  'superseded',
+] as const;
 
 export function registerRunTools(server: McpServer) {
   server.tool(
@@ -25,11 +40,15 @@ export function registerRunTools(server: McpServer) {
         .max(100)
         .optional()
         .describe('Max runs to return (default 25)'),
+      status: z.enum(RUN_STATUSES).optional().describe('Only runs in this status'),
       org_id: orgIdSchema,
     },
-    async ({ limit, org_id }) => {
+    async ({ limit, status, org_id }) => {
       const token = await getToken();
-      const qs = limit !== undefined ? `?limit=${limit}` : '';
+      const params = new URLSearchParams();
+      if (status !== undefined) params.set('status', status);
+      if (limit !== undefined) params.set('limit', String(limit));
+      const qs = params.size > 0 ? `?${params}` : '';
       const runs = await fleetRequest<Run[]>(`/runs${qs}`, { token, orgId: org_id });
       return {
         content: [{ type: 'text' as const, text: toToolText(runs) }],
@@ -94,6 +113,25 @@ export function registerRunTools(server: McpServer) {
       const token = await getToken();
       return reply(
         await fleetRequest(`/runs/${encodeURIComponent(run_id)}/retry`, {
+          token,
+          orgId: org_id,
+          method: 'POST',
+        }),
+      );
+    },
+  );
+
+  server.tool(
+    'move_run_to_front',
+    'Move a waiting FerrFleet run to the front of the line it waits in: its runner pool, or the cluster slot line. Only runs waiting in a runner pool or for cluster capacity can move. Returns the line and how many runs it moved ahead of (0 when it was already first). Refused with 409 when the run is not waiting (leased, running, finished, held for credits, or an external pipeline run) and with 403 for an org token: needs a personal token. Requires a FerrFleet API that has POST /runs/{id}/move-to-front.',
+    {
+      run_id: z.string().min(1).describe('Id of the waiting run to move to the front'),
+      org_id: orgIdSchema,
+    },
+    async ({ run_id, org_id }) => {
+      const token = await getToken();
+      return reply(
+        await fleetRequest(`/runs/${encodeURIComponent(run_id)}/move-to-front`, {
           token,
           orgId: org_id,
           method: 'POST',
