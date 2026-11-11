@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.17.0] - 2026-11-11
+
+### Features
+
+- feat(mcp): add create_connector and workflow entries and outputs (#36)
+
 ## [10.16.0] - 2026-11-10
 
 ### Features
