@@ -441,6 +441,63 @@ describe('ferrfleet tools', () => {
     expect(name.safeParse('a/b').success).toBe(false);
   });
 
+  it('create_connector posts a custom http connector with its secret', async () => {
+    const config = {
+      url: 'https://mcp.example.com',
+      headers: { 'x-team': 'a' },
+      secret_header: 'authorization',
+    };
+    await handlers.get('create_connector')!({
+      type: 'custom',
+      name: 'Docs',
+      config,
+      secret: 'hunter2',
+    });
+    const call = lastCall();
+    expect(call.url).toBe(`${FLEET}/connectors`);
+    expect(call.method).toBe('POST');
+    expect(call.body).toEqual({ type: 'custom', name: 'Docs', config, secret: 'hunter2' });
+  });
+
+  it('create_connector sends no secret or config key when they are omitted', async () => {
+    await handlers.get('create_connector')!({ type: 'custom', name: 'Docs' });
+    expect(lastCall().body).toEqual({ type: 'custom', name: 'Docs' });
+  });
+
+  it('create_connector does not echo the secret in the result', async () => {
+    mockFetch.mockResolvedValue(
+      ok({ id: 'conn-1', type: 'custom', name: 'Docs', has_secret: true }),
+    );
+    const result = await handlers.get('create_connector')!({
+      type: 'custom',
+      name: 'Docs',
+      secret: 'hunter2',
+    });
+    const text = result.content[0].text!;
+    expect(text).not.toContain('hunter2');
+    expect(JSON.parse(text)).toMatchObject({ has_secret: true });
+  });
+
+  it('create_connector surfaces API validation errors', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: () => Promise.resolve('bad config'),
+      json: () => Promise.resolve({}),
+    } as unknown as Response);
+    await expect(
+      handlers.get('create_connector')!({ type: 'custom', name: 'Docs', secret: 'hunter2' }),
+    ).rejects.toThrow(/400(?!.*hunter2)/s);
+  });
+
+  it('create_connector only accepts names the API accepts and an object config', () => {
+    const { name, config, secret } = schemas.get('create_connector')!;
+    expect(name.safeParse('Docs 1').success).toBe(true);
+    expect(name.safeParse('-docs').success).toBe(false);
+    expect(config.safeParse('x').success).toBe(false);
+    expect(secret.safeParse('').success).toBe(false);
+  });
+
   it('list_github_installations reads the installations collection', async () => {
     mockFetch.mockResolvedValue(ok([]));
     await handlers.get('list_github_installations')!({});

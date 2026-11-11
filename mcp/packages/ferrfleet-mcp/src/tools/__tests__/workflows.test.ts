@@ -40,6 +40,31 @@ function lastCall(): { url: string; method: string; body: unknown } {
   };
 }
 
+function callAt(index: number): { url: string; method: string; body: unknown } {
+  const [url, init] = mockFetch.mock.calls[index];
+  return {
+    url: String(url),
+    method: init.method ?? 'GET',
+    body: init.body ? JSON.parse(init.body) : undefined,
+  };
+}
+
+const cronEntry = {
+  id: 'nightly',
+  kind: 'cron',
+  cron: '0 6 * * *',
+  starts: ['review'],
+  position: { x: 0, y: 0 },
+};
+const issueOutput = {
+  id: 'file-issue',
+  from: 'review',
+  kind: 'github_issue',
+  connector_id: 'conn-1',
+  repo: 'FerrLabs/FerrFleet',
+  position: { x: 5, y: 5 },
+};
+
 const FLEET = 'https://api.ferrfleet.com';
 const ID = '3f0c6a52-8d1e-4b7a-9c2f-5e6d7a8b9c01';
 const OTHER_ID = '7a1d9e34-2b5c-4f80-8e6a-1c3b5d7f9a02';
@@ -98,12 +123,126 @@ describe('workflow and event rule tools', () => {
       });
     });
 
-    it('update_workflow replaces with PUT and keeps workflow_id out of the body', async () => {
+    it('create_workflow posts entries and outputs', async () => {
+      await handlers.get('create_workflow')!({
+        name: 'Review',
+        steps: [step],
+        entries: [cronEntry],
+        outputs: [issueOutput],
+      });
+      expect(lastCall().body).toEqual({
+        name: 'Review',
+        steps: [step],
+        entries: [cronEntry],
+        outputs: [issueOutput],
+      });
+    });
+
+    it('update_workflow keeps stored entries, outputs and enabled when omitted', async () => {
+      mockFetch.mockResolvedValueOnce(
+        respond(200, {
+          id: ID,
+          enabled: false,
+          entries: [{ ...cronEntry, next_run_at: '2026-11-12T06:00:00Z' }],
+          outputs: [issueOutput],
+        }),
+      );
       await handlers.get('update_workflow')!({ workflow_id: ID, name: 'Review', steps: [step] });
-      expect(lastCall()).toEqual({
+      expect(callAt(0)).toMatchObject({ url: `${FLEET}/workflows/${ID}`, method: 'GET' });
+      expect(callAt(1)).toEqual({
         url: `${FLEET}/workflows/${ID}`,
         method: 'PUT',
-        body: { name: 'Review', steps: [step] },
+        body: {
+          name: 'Review',
+          steps: [step],
+          enabled: false,
+          entries: [{ ...cronEntry, next_run_at: '2026-11-12T06:00:00Z' }],
+          outputs: [issueOutput],
+        },
+      });
+    });
+
+    it('update_workflow clears entries and outputs only when given empty arrays', async () => {
+      mockFetch.mockResolvedValueOnce(
+        respond(200, { id: ID, enabled: true, entries: [cronEntry], outputs: [issueOutput] }),
+      );
+      await handlers.get('update_workflow')!({
+        workflow_id: ID,
+        name: 'Review',
+        steps: [step],
+        entries: [],
+        outputs: [],
+      });
+      expect(callAt(1).body).toMatchObject({ entries: [], outputs: [], enabled: true });
+    });
+
+    it('update_workflow sends the given entries and outputs over the stored ones', async () => {
+      mockFetch.mockResolvedValueOnce(
+        respond(200, { id: ID, enabled: true, entries: [], outputs: [issueOutput] }),
+      );
+      await handlers.get('update_workflow')!({
+        workflow_id: ID,
+        name: 'Review',
+        steps: [step],
+        entries: [cronEntry],
+      });
+      expect(callAt(1).body).toMatchObject({ entries: [cronEntry], outputs: [issueOutput] });
+    });
+
+    it('update_workflow skips the read when everything is given', async () => {
+      await handlers.get('update_workflow')!({
+        workflow_id: ID,
+        name: 'Review',
+        steps: [step],
+        enabled: true,
+        entries: [cronEntry],
+        outputs: [issueOutput],
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(lastCall()).toMatchObject({ method: 'PUT' });
+    });
+
+    it('update_workflow does not write when the stored workflow cannot be read', async () => {
+      mockFetch.mockResolvedValueOnce(respond(404, { error: 'not_found' }));
+      await expect(
+        handlers.get('update_workflow')!({ workflow_id: ID, name: 'Review', steps: [step] }),
+      ).rejects.toThrow('not_found');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    describe('entries and outputs schemas', () => {
+      it('accepts cron and manual entries and a github_issue output', () => {
+        expect(accepts('create_workflow', 'entries', [cronEntry])).toBe(true);
+        expect(
+          accepts('create_workflow', 'entries', [
+            { id: 'go', kind: 'manual', starts: ['review'], position: { x: 0, y: 0 } },
+          ]),
+        ).toBe(true);
+        expect(accepts('update_workflow', 'outputs', [issueOutput])).toBe(true);
+      });
+
+      it('rejects unknown kinds and keys', () => {
+        expect(accepts('create_workflow', 'entries', [{ ...cronEntry, kind: 'weekly' }])).toBe(
+          false,
+        );
+        expect(accepts('create_workflow', 'entries', [{ ...cronEntry, extra: 1 }])).toBe(false);
+        expect(accepts('create_workflow', 'outputs', [{ ...issueOutput, kind: 'sms' }])).toBe(
+          false,
+        );
+      });
+
+      it('requires starts on an entry and from on an output', () => {
+        const { starts: _starts, ...noStarts } = cronEntry;
+        const { from: _from, ...noFrom } = issueOutput;
+        expect(accepts('create_workflow', 'entries', [noStarts])).toBe(false);
+        expect(accepts('create_workflow', 'outputs', [noFrom])).toBe(false);
+      });
+
+      it('caps entries and outputs at 10', () => {
+        const entries = Array.from({ length: 11 }, (_, i) => ({ ...cronEntry, id: `e${i}` }));
+        const outputs = Array.from({ length: 11 }, (_, i) => ({ ...issueOutput, id: `o${i}` }));
+        expect(accepts('create_workflow', 'entries', entries)).toBe(false);
+        expect(accepts('create_workflow', 'outputs', outputs)).toBe(false);
       });
     });
 
@@ -121,6 +260,11 @@ describe('workflow and event rule tools', () => {
         method: 'POST',
         body: { pr: 4 },
       });
+    });
+
+    it('run_workflow starts a workflow that has a cron entry without naming an entry', async () => {
+      await handlers.get('run_workflow')!({ workflow_id: ID });
+      expect(lastCall().url).toBe(`${FLEET}/workflows/${ID}/runs`);
     });
 
     it('run_workflow sends an empty object when no input is given', async () => {

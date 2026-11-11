@@ -19,6 +19,37 @@ export function registerConnectorTools(server: McpServer) {
   );
 
   server.tool(
+    'create_connector',
+    'Create a connector of any type the API accepts (github, custom, ferrtrack, ferrvault, ferrgrowth, playwright, gitlab, forgejo, jira, linear). The config shape depends on the type; for custom it is the http transport: url, headers, secret_header. The secret is optional and can be set later in the UI; it is never returned, only has_secret.',
+    {
+      type: z.string().min(1).describe('Connector type, for example custom'),
+      name: z
+        .string()
+        .regex(CONNECTOR_NAME_PATTERN)
+        .describe('Display name: letters, digits, spaces, underscores and hyphens, up to 63 chars'),
+      config: z.record(z.string(), z.unknown()).optional().describe('Type specific config object'),
+      secret: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Secret such as an API token; omit it to set it later in the UI'),
+      org_id: orgIdSchema,
+    },
+    async ({ type, name, config, secret, org_id }) => {
+      const token = await getToken();
+      const connector = await fleetRequest<unknown>('/connectors', {
+        method: 'POST',
+        body: { type, name, config, secret },
+        token,
+        orgId: org_id,
+      });
+      return {
+        content: [{ type: 'text' as const, text: toToolText(connector) }],
+      };
+    },
+  );
+
+  server.tool(
     'set_agent_connectors',
     "Set the connectors attached to an agent. This REPLACES the agent's whole connector list: connectors not in connector_ids are detached, and an empty list detaches all of them. Every id must be a connector of the organization (see list_connectors).",
     {
@@ -49,7 +80,7 @@ export function registerConnectorTools(server: McpServer) {
 
   server.tool(
     'update_connector',
-    "Update a FerrFleet connector's name or config. Only the fields you pass change; at least one is required. config REPLACES the whole config object, it is not merged with the existing one. Secrets cannot be set through this server.",
+    "Update a FerrFleet connector's name or config. Only the fields you pass change; at least one is required. config REPLACES the whole config object, it is not merged with the existing one. Secrets cannot be changed through this server.",
     {
       connector_id: z.string().min(1).describe('Connector id'),
       org_id: orgIdSchema,
