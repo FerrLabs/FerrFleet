@@ -5,6 +5,16 @@ import { reply } from './reply.js';
 
 const JOIN_CONDITIONS = ['all_completed', 'all_finished', 'any_completed'] as const;
 
+const ENTRY_KINDS = ['event', 'cron', 'manual'] as const;
+
+const OUTPUT_KINDS = [
+  'github_comment',
+  'github_review',
+  'github_issue',
+  'ferrtrack_ticket',
+  'webhook',
+] as const;
+
 const STEP_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 const stepSchema = z.strictObject({
@@ -37,6 +47,41 @@ const stepSchema = z.strictObject({
     .describe('Canvas position of the step in the editor'),
 });
 
+const positionSchema = z
+  .strictObject({ x: z.number(), y: z.number() })
+  .describe('Canvas position in the editor');
+
+const entrySchema = z.strictObject({
+  id: z
+    .string()
+    .min(1)
+    .describe('Entry id, unique among the steps, entries and outputs of the workflow'),
+  kind: z.enum(ENTRY_KINDS).describe('event, cron or manual'),
+  cron: z
+    .string()
+    .optional()
+    .describe('Required for cron, refused otherwise: 5 field cron expression, evaluated in UTC'),
+  starts: z.array(z.string().min(1)).describe('Ids of the root steps this entry starts'),
+  position: positionSchema,
+});
+
+const outputSchema = z.strictObject({
+  id: z
+    .string()
+    .min(1)
+    .describe('Output id, unique among the steps, entries and outputs of the workflow'),
+  from: z.string().min(1).describe('Id of the step whose result is delivered'),
+  kind: z.enum(OUTPUT_KINDS).describe('Where the result goes'),
+  connector_id: z
+    .string()
+    .optional()
+    .describe('Connector of the matching type, from list_connectors (github_*, ferrtrack_ticket)'),
+  url: z.string().optional().describe('Target url for a webhook output'),
+  project: z.string().optional().describe('Project slug for a ferrtrack_ticket output'),
+  repo: z.string().optional().describe('owner/name repository for a github output'),
+  position: positionSchema,
+});
+
 const workflowFields = {
   name: z.string().trim().min(1).max(100).describe('Workflow name'),
   enabled: z.boolean().optional().describe('Whether the workflow can run; defaults to true'),
@@ -48,6 +93,24 @@ const workflowFields = {
       'One to 20 steps forming an acyclic graph with at least one root. Two steps on the same agent must be ordered with needs',
     ),
 };
+
+interface StoredWorkflow {
+  enabled: boolean;
+  entries: unknown[];
+  outputs: unknown[];
+}
+
+const entriesField = z
+  .array(entrySchema)
+  .max(10)
+  .describe('What starts the workflow: cron schedules, event or manual entries');
+
+const outputsField = z
+  .array(outputSchema)
+  .max(10)
+  .describe('Where step results are delivered, for example a github_issue');
+
+const entryAndOutputFields = { entries: entriesField.optional(), outputs: outputsField.optional() };
 
 const workflowIdSchema = z.guid().describe('Workflow id from list_workflows');
 
@@ -64,7 +127,7 @@ export function registerWorkflowTools(server: McpServer) {
 
   server.tool(
     'get_workflow',
-    'Get a workflow with its steps.',
+    'Get a workflow with its entries, steps and outputs.',
     { workflow_id: workflowIdSchema, org_id: orgIdSchema },
     async ({ workflow_id, org_id }) => {
       const token = await getToken();
@@ -74,8 +137,8 @@ export function registerWorkflowTools(server: McpServer) {
 
   server.tool(
     'create_workflow',
-    'Create a workflow: a graph of agent steps. The API refuses cycles, unknown needs or agents, and two steps on the same agent that could run at the same time.',
-    { ...workflowFields, org_id: orgIdSchema },
+    'Create a workflow: a graph of agent steps, with optional entries (cron, event, manual) and outputs (github_issue and others). The API refuses cycles, unknown needs or agents, two steps on the same agent that could run at the same time, and invalid entries or outputs.',
+    { ...workflowFields, ...entryAndOutputFields, org_id: orgIdSchema },
     async ({ org_id, ...body }) => {
       const token = await getToken();
       return reply(
@@ -86,18 +149,30 @@ export function registerWorkflowTools(server: McpServer) {
 
   server.tool(
     'update_workflow',
-    'Replace a workflow. Send the whole workflow, not a patch: steps you leave out are removed.',
-    { workflow_id: workflowIdSchema, ...workflowFields, org_id: orgIdSchema },
-    async ({ workflow_id, org_id, ...body }) => {
+    'Replace a workflow. Send the whole workflow, not a patch: steps you leave out are removed. entries, outputs and enabled keep their current values when omitted; pass entries: [] or outputs: [] to clear them.',
+    {
+      workflow_id: workflowIdSchema,
+      ...workflowFields,
+      ...entryAndOutputFields,
+      org_id: orgIdSchema,
+    },
+    async ({ workflow_id, org_id, ...fields }) => {
       const token = await getToken();
-      return reply(
-        await fleetRequest(`/workflows/${workflow_id}`, {
-          token,
-          orgId: org_id,
-          method: 'PUT',
-          body,
-        }),
-      );
+      const path = `/workflows/${workflow_id}`;
+      const needsCurrent =
+        fields.entries === undefined ||
+        fields.outputs === undefined ||
+        fields.enabled === undefined;
+      const current = needsCurrent
+        ? await fleetRequest<StoredWorkflow>(path, { token, orgId: org_id })
+        : undefined;
+      const body = {
+        ...fields,
+        enabled: fields.enabled ?? current?.enabled,
+        entries: fields.entries ?? current?.entries,
+        outputs: fields.outputs ?? current?.outputs,
+      };
+      return reply(await fleetRequest(path, { token, orgId: org_id, method: 'PUT', body }));
     },
   );
 
