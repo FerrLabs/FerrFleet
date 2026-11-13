@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.17.2] - 2026-11-13
+
+### Bug Fixes
+
+- fix(mcp): request the FerrFleet scopes when authorizing (#35)
+
 ## [10.17.1] - 2026-11-12
 
 ### Bug Fixes
