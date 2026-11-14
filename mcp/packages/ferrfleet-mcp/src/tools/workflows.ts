@@ -70,7 +70,14 @@ const outputSchema = z.strictObject({
     .string()
     .min(1)
     .describe('Output id, unique among the steps, entries and outputs of the workflow'),
-  from: z.string().min(1).describe('Id of the step whose result is delivered'),
+  from: z
+    .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
+    .refine((from) => typeof from === 'string' || new Set(from).size === from.length, {
+      message: 'Step ids must be unique',
+    })
+    .describe(
+      'Id of the step whose result is delivered, or a non-empty list of distinct step ids: the output waits for all of them, ignores skipped ones and delivers the last listed step that completed with a body',
+    ),
   kind: z.enum(OUTPUT_KINDS).describe('Where the result goes'),
   connector_id: z
     .string()

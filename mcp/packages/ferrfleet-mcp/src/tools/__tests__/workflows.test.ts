@@ -238,6 +238,33 @@ describe('workflow and event rule tools', () => {
         expect(accepts('create_workflow', 'outputs', [noFrom])).toBe(false);
       });
 
+      it('accepts from as a step id or a non-empty list of distinct step ids', () => {
+        expect(accepts('create_workflow', 'outputs', [{ ...issueOutput, from: 'review' }])).toBe(
+          true,
+        );
+        expect(
+          accepts('create_workflow', 'outputs', [{ ...issueOutput, from: ['review', 'verify'] }]),
+        ).toBe(true);
+        expect(accepts('update_workflow', 'outputs', [{ ...issueOutput, from: ['review'] }])).toBe(
+          true,
+        );
+      });
+
+      it('refuses an empty, duplicated or malformed from', () => {
+        for (const from of [[], ['review', 'review'], [''], ['review', 3], '', 3, null]) {
+          expect(
+            accepts('create_workflow', 'outputs', [{ ...issueOutput, from }]),
+            String(from),
+          ).toBe(false);
+        }
+      });
+
+      it('create_workflow posts a list from unchanged', async () => {
+        const output = { ...issueOutput, from: ['review', 'verify'] };
+        await handlers.get('create_workflow')!({ name: 'wf', steps: [step], outputs: [output] });
+        expect(lastCall().body).toMatchObject({ outputs: [output] });
+      });
+
       it('caps entries and outputs at 10', () => {
         const entries = Array.from({ length: 11 }, (_, i) => ({ ...cronEntry, id: `e${i}` }));
         const outputs = Array.from({ length: 11 }, (_, i) => ({ ...issueOutput, id: `o${i}` }));
