@@ -402,6 +402,24 @@ describe('workflow and event rule tools', () => {
       });
     });
 
+    it('update_event_rule forwards entry_id of a workflow outcome', async () => {
+      const outcome = { action: 'workflow', workflow_id: ID, entry_id: 'renovate-pr' };
+      await handlers.get('update_event_rule')!({ rule_id: ID, name: 'R', outcome });
+      expect(lastCall().body).toEqual({ name: 'R', outcome });
+    });
+
+    it('create_event_rule forwards entry_id of a workflow outcome', async () => {
+      const outcome = { action: 'workflow', workflow_id: ID, entry_id: 'pr' };
+      await handlers.get('create_event_rule')!({ name: 'R', outcome });
+      expect(lastCall().body).toEqual({ name: 'R', outcome });
+    });
+
+    it('a workflow outcome without entry_id sends none', async () => {
+      const outcome = { action: 'workflow', workflow_id: ID };
+      await handlers.get('create_event_rule')!({ name: 'R', outcome });
+      expect(lastCall().body).toEqual({ name: 'R', outcome });
+    });
+
     it('delete_event_rule sends DELETE and reports the id on 204', async () => {
       mockFetch.mockResolvedValue(respond(204));
       const result = await handlers.get('delete_event_rule')!({ rule_id: ID });
@@ -449,6 +467,12 @@ describe('workflow and event rule tools', () => {
         );
         expect(ok(skip)).toBe(true);
         expect(ok({ action: 'workflow', workflow_id: ID })).toBe(true);
+        expect(ok({ action: 'workflow', workflow_id: ID, entry_id: 'pr' })).toBe(true);
+      });
+
+      it('rejects an empty or non-string entry_id', () => {
+        expect(ok({ action: 'workflow', workflow_id: ID, entry_id: '' })).toBe(false);
+        expect(ok({ action: 'workflow', workflow_id: ID, entry_id: 1 })).toBe(false);
       });
 
       it('rejects an unknown action', () => {
@@ -476,6 +500,7 @@ describe('workflow and event rule tools', () => {
       it('rejects fields from another variant', () => {
         expect(ok({ action: 'skip', reason: 'x', agent_id: 'a' })).toBe(false);
         expect(ok({ action: 'run', workflow_id: ID })).toBe(false);
+        expect(ok({ action: 'skip', reason: 'x', entry_id: 'pr' })).toBe(false);
       });
     });
 
