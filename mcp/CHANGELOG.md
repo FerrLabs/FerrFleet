@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.18.0] - 2026-11-14
+
+### Features
+
+- feat(mcp): accept entry_id on workflow event rule outcomes (#40)
+
 ## [10.17.2] - 2026-11-13
 
 ### Bug Fixes
