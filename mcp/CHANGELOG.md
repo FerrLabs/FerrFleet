@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.19.0] - 2026-11-14
+
+### Features
+
+- feat(mcp): accept several source steps in a workflow output from (#41)
+
 ## [10.18.0] - 2026-11-14
 
 ### Features
