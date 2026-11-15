@@ -8,7 +8,10 @@ const EVENT_KINDS = [
   'pull_request_updated',
   'review_requested',
   'pipeline_failed',
+  'issue_labeled',
+  'issue_commented',
 ] as const;
+const ISSUE_KINDS: readonly string[] = ['issue_labeled', 'issue_commented'];
 const UPDATE_TYPES = ['patch', 'minor', 'major'] as const;
 const DEDUP_MODES = ['head_commit', 'none'] as const;
 
@@ -27,12 +30,17 @@ const conditionsSchema = z
   .strictObject({
     sources: z.array(z.literal('github')).describe('Event sources; github today'),
     kinds: z.array(z.enum(EVENT_KINDS)).describe('Event kinds'),
-    opened_by: actorSchema.describe('Pull request author'),
+    opened_by: actorSchema.describe('Pull request or issue author'),
     triggered_by: actorSchema.describe('Account that caused this delivery'),
     repositories: patterns('owner/name globs, case-insensitive'),
     target_branches: patterns('Base branch globs'),
     head_branches: patterns('Head branch globs'),
-    labels: patterns('Pull request labels, any of'),
+    labels: patterns('Labels on the pull request or issue (all labels it carries), any of'),
+    label: z
+      .string()
+      .trim()
+      .min(1)
+      .describe('The label just added, case-insensitive; only meaningful for issue_labeled'),
     paths: z
       .strictObject({
         mode: z.enum(['any', 'all']),
@@ -80,6 +88,22 @@ const ruleFields = {
   outcome: outcomeSchema,
 };
 
+const issueRunError = (
+  conditions: z.infer<typeof conditionsSchema> | undefined,
+  outcome: z.infer<typeof outcomeSchema>,
+) =>
+  outcome.action === 'run' && conditions?.kinds?.some((kind) => ISSUE_KINDS.includes(kind))
+    ? {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: 'Issue events (issue_labeled, issue_commented) can only start a workflow or be skipped: use a workflow or skip outcome.',
+          },
+        ],
+      }
+    : undefined;
+
 const ruleIdSchema = z.guid().describe('Rule id from list_event_rules');
 
 export function registerEventRuleTools(server: McpServer) {
@@ -95,9 +119,11 @@ export function registerEventRuleTools(server: McpServer) {
 
   server.tool(
     'create_event_rule',
-    'Add an event rule at the end of the list. Rules are evaluated in order and the first match wins; without a match the bound agent runs once per head commit. The outcome is run, skip (needs a reason) or workflow.',
+    'Add an event rule at the end of the list. Rules are evaluated in order and the first match wins; without a match the bound agent runs once per head commit. The outcome is run, skip (needs a reason) or workflow. Issue kinds (issue_labeled, issue_commented) only allow a workflow or skip outcome (the API answers 422 for run); for them opened_by is the issue author, triggered_by the account that labelled or commented, labels every label on the issue, and label the one just added (issue_labeled only). Rules without kinds never match an issue event.',
     { ...ruleFields, org_id: orgIdSchema },
     async ({ org_id, ...body }) => {
+      const refused = issueRunError(body.conditions, body.outcome);
+      if (refused) return refused;
       const token = await getToken();
       return reply(
         await fleetRequest('/event-rules', { token, orgId: org_id, method: 'POST', body }),
@@ -107,9 +133,11 @@ export function registerEventRuleTools(server: McpServer) {
 
   server.tool(
     'update_event_rule',
-    'Replace an event rule. Send the whole rule, not a patch; omitted conditions are cleared.',
+    'Replace an event rule. Send the whole rule, not a patch; omitted conditions are cleared. Issue kinds only allow a workflow or skip outcome.',
     { rule_id: ruleIdSchema, ...ruleFields, org_id: orgIdSchema },
     async ({ rule_id, org_id, ...body }) => {
+      const refused = issueRunError(body.conditions, body.outcome);
+      if (refused) return refused;
       const token = await getToken();
       return reply(
         await fleetRequest(`/event-rules/${rule_id}`, {

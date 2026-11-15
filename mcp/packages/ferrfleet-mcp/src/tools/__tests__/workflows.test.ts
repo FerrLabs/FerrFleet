@@ -221,6 +221,24 @@ describe('workflow and event rule tools', () => {
         expect(accepts('update_workflow', 'outputs', [issueOutput])).toBe(true);
       });
 
+      it('tolerates next_run_at on an entry and drops it from the parsed value', () => {
+        const parsed = field('update_workflow', 'entries').safeParse([
+          { ...cronEntry, next_run_at: '2026-11-16T06:00:00Z' },
+          { ...cronEntry, id: 'idle', next_run_at: null },
+        ]);
+        expect(parsed.success).toBe(true);
+        expect(parsed.data).toEqual([cronEntry, { ...cronEntry, id: 'idle' }]);
+      });
+
+      it('still rejects other unknown keys on an entry', () => {
+        expect(accepts('create_workflow', 'entries', [{ ...cronEntry, last_run_at: 'x' }])).toBe(
+          false,
+        );
+        expect(accepts('create_workflow', 'entries', [{ ...cronEntry, next_run_at: 5 }])).toBe(
+          false,
+        );
+      });
+
       it('rejects unknown kinds and keys', () => {
         expect(accepts('create_workflow', 'entries', [{ ...cronEntry, kind: 'weekly' }])).toBe(
           false,
@@ -305,6 +323,28 @@ describe('workflow and event rule tools', () => {
       expect(accepts('run_workflow', 'input', [1])).toBe(false);
     });
 
+    it('run_workflow passes entry as a query parameter and keeps the input as the body', async () => {
+      await handlers.get('run_workflow')!({ workflow_id: ID, entry: 'go', input: { pr: 4 } });
+      expect(lastCall()).toEqual({
+        url: `${FLEET}/workflows/${ID}/runs?entry=go`,
+        method: 'POST',
+        body: { pr: 4 },
+      });
+    });
+
+    it('run_workflow encodes the entry id and sends no query without one', async () => {
+      await handlers.get('run_workflow')!({ workflow_id: ID, entry: 'a b&c' });
+      expect(lastCall().url).toBe(`${FLEET}/workflows/${ID}/runs?entry=a%20b%26c`);
+      mockFetch.mockClear();
+      await handlers.get('run_workflow')!({ workflow_id: ID });
+      expect(lastCall().url).toBe(`${FLEET}/workflows/${ID}/runs`);
+    });
+
+    it('run_workflow refuses an empty entry', () => {
+      expect(accepts('run_workflow', 'entry', '')).toBe(false);
+      expect(accepts('run_workflow', 'entry', 'go')).toBe(true);
+    });
+
     it('list_workflow_runs passes limit as a query parameter', async () => {
       await handlers.get('list_workflow_runs')!({ workflow_id: ID, limit: 20 });
       expect(lastCall().url).toBe(`${FLEET}/workflows/${ID}/runs?limit=20`);
@@ -342,6 +382,60 @@ describe('workflow and event rule tools', () => {
       it('accepts a minimal and a full step', () => {
         expect(parse(step)).toBe(true);
         expect(parse(fullStep)).toBe(true);
+      });
+
+      it('accepts literal, auto and from for model and effort', () => {
+        for (const model of ['opus', 'sonnet', 'haiku', 'claude-opus-5', 'claude-haiku-4-5']) {
+          expect(parse({ ...step, model }), model).toBe(true);
+        }
+        for (const effort of ['low', 'medium', 'high', 'xhigh', 'max']) {
+          expect(parse({ ...step, effort }), effort).toBe(true);
+        }
+        expect(parse({ ...step, model: 'auto', effort: 'auto' })).toBe(true);
+        expect(parse({ ...step, model: { from: 'triage' }, effort: { from: 'triage' } })).toBe(
+          true,
+        );
+      });
+
+      it('rejects unknown models and efforts', () => {
+        for (const model of ['gpt-5', 'Opus', 'claude-', 'claude-Opus', '', 3, null]) {
+          expect(parse({ ...step, model }), String(model)).toBe(false);
+        }
+        for (const effort of ['extreme', 'HIGH', '', 3, null, 'opus']) {
+          expect(parse({ ...step, effort }), String(effort)).toBe(false);
+        }
+      });
+
+      it('refuses a from with extra keys, an empty from or a malformed step id', () => {
+        expect(parse({ ...step, model: { from: 'triage', default: 'opus' } })).toBe(false);
+        expect(parse({ ...step, effort: { from: 'triage', extra: 1 } })).toBe(false);
+        expect(parse({ ...step, model: {} })).toBe(false);
+        expect(parse({ ...step, model: { from: '' } })).toBe(false);
+        expect(parse({ ...step, effort: { from: 'Bad Id' } })).toBe(false);
+        expect(parse({ ...step, effort: { from: 3 } })).toBe(false);
+      });
+
+      it('create_workflow and update_workflow pass step model and effort through', async () => {
+        const choiceStep = { ...step, model: { from: 'triage' }, effort: 'auto' };
+        await handlers.get('create_workflow')!({ name: 'W', steps: [choiceStep] });
+        expect(lastCall().body).toMatchObject({ steps: [choiceStep] });
+        mockFetch.mockClear();
+        await handlers.get('update_workflow')!({
+          workflow_id: ID,
+          name: 'W',
+          enabled: true,
+          entries: [],
+          outputs: [],
+          steps: [choiceStep],
+        });
+        expect(lastCall().body).toMatchObject({ steps: [choiceStep] });
+      });
+
+      it('a step without model or effort sends neither', async () => {
+        await handlers.get('create_workflow')!({ name: 'W', steps: [step] });
+        const sent = (lastCall().body as { steps: Record<string, unknown>[] }).steps[0];
+        expect(sent).not.toHaveProperty('model');
+        expect(sent).not.toHaveProperty('effort');
       });
 
       it('requires agent_id, id and position', () => {
@@ -445,6 +539,87 @@ describe('workflow and event rule tools', () => {
       const outcome = { action: 'workflow', workflow_id: ID };
       await handlers.get('create_event_rule')!({ name: 'R', outcome });
       expect(lastCall().body).toEqual({ name: 'R', outcome });
+    });
+
+    it('create_event_rule forwards an issue_labeled rule with a label', async () => {
+      const rule = {
+        name: 'Ready',
+        conditions: {
+          kinds: ['issue_labeled'],
+          label: 'agent-ready',
+          labels: ['backend'],
+          opened_by: { kind: 'human' },
+          repositories: ['acme/*'],
+        },
+        outcome: { action: 'workflow', workflow_id: ID },
+      };
+      await handlers.get('create_event_rule')!(rule);
+      expect(lastCall().body).toEqual(rule);
+    });
+
+    it('update_event_rule forwards an issue_commented skip rule', async () => {
+      const outcome = { action: 'skip', reason: 'noise' };
+      await handlers.get('update_event_rule')!({
+        rule_id: ID,
+        name: 'R',
+        conditions: { kinds: ['issue_commented'] },
+        outcome,
+      });
+      expect(lastCall().body).toEqual({
+        name: 'R',
+        conditions: { kinds: ['issue_commented'] },
+        outcome,
+      });
+    });
+
+    it.each(['create_event_rule', 'update_event_rule'])(
+      '%s refuses a run outcome on an issue kind without calling the API',
+      async (tool) => {
+        for (const kinds of [
+          ['issue_labeled'],
+          ['issue_commented'],
+          ['pull_request_opened', 'issue_labeled'],
+        ]) {
+          const result = await handlers.get(tool)!({
+            rule_id: ID,
+            name: 'R',
+            conditions: { kinds },
+            outcome: { action: 'run' },
+          });
+          expect(result.isError, kinds.join()).toBe(true);
+        }
+        expect(mockFetch).not.toHaveBeenCalled();
+      },
+    );
+
+    it('still allows a run outcome on pull request kinds and on rules without kinds', async () => {
+      await handlers.get('create_event_rule')!({
+        name: 'R',
+        conditions: { kinds: ['pull_request_opened'] },
+        outcome: { action: 'run' },
+      });
+      await handlers.get('create_event_rule')!({ name: 'R', outcome: { action: 'run' } });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    describe('conditions schema', () => {
+      const conditions = (value: unknown) => accepts('create_event_rule', 'conditions', value);
+
+      it('accepts the issue kinds and rejects unknown kinds', () => {
+        expect(conditions({ kinds: ['issue_labeled', 'issue_commented'] })).toBe(true);
+        expect(conditions({ kinds: ['issue_closed'] })).toBe(false);
+      });
+
+      it('accepts label as a non-empty string', () => {
+        expect(conditions({ kinds: ['issue_labeled'], label: 'agent-ready' })).toBe(true);
+        expect(conditions({ label: '' })).toBe(false);
+        expect(conditions({ label: ['a'] })).toBe(false);
+      });
+
+      it('still refuses unknown conditions', () => {
+        expect(conditions({ lable: 'x' })).toBe(false);
+        expect(conditions({ issue_number: 4 })).toBe(false);
+      });
     });
 
     it('delete_event_rule sends DELETE and reports the id on 204', async () => {
