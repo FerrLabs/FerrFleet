@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getToken, type McpServer } from '@ferrlabs/mcp-core';
 import { fleetRequest, orgIdSchema } from '../api-base.js';
+import { stepEffortSchema, stepModelSchema } from './model-choice.js';
 import { reply } from './reply.js';
 
 const JOIN_CONDITIONS = ['all_completed', 'all_finished', 'any_completed'] as const;
@@ -42,6 +43,16 @@ const stepSchema = z.strictObject({
     .record(z.string(), z.unknown())
     .optional()
     .describe('Structured input passed to the agent, up to 8 KiB'),
+  model: stepModelSchema
+    .optional()
+    .describe(
+      'Model for this step: opus, sonnet, haiku or a claude-* id; {"from": "<step id>"} to take it from the model key of that ancestor step\'s result; or "auto" to take it from the model key of the result of the only step in needs. Resolution order: run input (top-level model key of the run body) > step field > agent default',
+    ),
+  effort: stepEffortSchema
+    .optional()
+    .describe(
+      'Effort for this step: low, medium, high, xhigh or max; {"from": "<step id>"} to take it from the effort key of that ancestor step\'s result; or "auto" to take it from the effort key of the result of the only step in needs. Resolution order: run input (top-level effort key of the run body) > step field > agent default',
+    ),
   position: z
     .strictObject({ x: z.number(), y: z.number() })
     .describe('Canvas position of the step in the editor'),
@@ -51,19 +62,26 @@ const positionSchema = z
   .strictObject({ x: z.number(), y: z.number() })
   .describe('Canvas position in the editor');
 
-const entrySchema = z.strictObject({
-  id: z
-    .string()
-    .min(1)
-    .describe('Entry id, unique among the steps, entries and outputs of the workflow'),
-  kind: z.enum(ENTRY_KINDS).describe('event, cron or manual'),
-  cron: z
-    .string()
-    .optional()
-    .describe('Required for cron, refused otherwise: 5 field cron expression, evaluated in UTC'),
-  starts: z.array(z.string().min(1)).describe('Ids of the root steps this entry starts'),
-  position: positionSchema,
-});
+const entrySchema = z
+  .strictObject({
+    id: z
+      .string()
+      .min(1)
+      .describe('Entry id, unique among the steps, entries and outputs of the workflow'),
+    kind: z.enum(ENTRY_KINDS).describe('event, cron or manual'),
+    cron: z
+      .string()
+      .optional()
+      .describe('Required for cron, refused otherwise: 5 field cron expression, evaluated in UTC'),
+    starts: z.array(z.string().min(1)).describe('Ids of the root steps this entry starts'),
+    next_run_at: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Returned by get_workflow on cron entries; accepted and dropped, never sent'),
+    position: positionSchema,
+  })
+  .transform(({ next_run_at: _nextRunAt, ...entry }) => entry);
 
 const outputSchema = z.strictObject({
   id: z
@@ -144,7 +162,7 @@ export function registerWorkflowTools(server: McpServer) {
 
   server.tool(
     'create_workflow',
-    'Create a workflow: a graph of agent steps, with optional entries (cron, event, manual) and outputs (github_issue and others). The API refuses cycles, unknown needs or agents, two steps on the same agent that could run at the same time, and invalid entries or outputs.',
+    'Create a workflow: a graph of agent steps, with optional entries (cron, event, manual) and outputs (github_issue and others). The API refuses cycles, unknown needs or agents, two steps on the same agent that could run at the same time, and invalid entries or outputs. A step may set model and effort; see their descriptions for the resolution order.',
     { ...workflowFields, ...entryAndOutputFields, org_id: orgIdSchema },
     async ({ org_id, ...body }) => {
       const token = await getToken();
@@ -200,19 +218,27 @@ export function registerWorkflowTools(server: McpServer) {
 
   server.tool(
     'run_workflow',
-    'Start a workflow run now. Returns the run; poll get_workflow_run for step states and agent runs.',
+    'Start a workflow run now. Returns the run; poll get_workflow_run for step states and agent runs. A top-level model or effort key in input overrides every step and agent default for this run.',
     {
       workflow_id: workflowIdSchema,
       org_id: orgIdSchema,
+      entry: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          'Id of a manual entry of the workflow to start from; omit to start every root step',
+        ),
       input: z
         .record(z.string(), z.unknown())
         .optional()
         .describe('Optional input object for the run, up to 64 KiB'),
     },
-    async ({ workflow_id, input, org_id }) => {
+    async ({ workflow_id, input, entry, org_id }) => {
       const token = await getToken();
+      const qs = entry !== undefined ? `?entry=${encodeURIComponent(entry)}` : '';
       return reply(
-        await fleetRequest(`/workflows/${workflow_id}/runs`, {
+        await fleetRequest(`/workflows/${workflow_id}/runs${qs}`, {
           token,
           orgId: org_id,
           method: 'POST',

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getToken, type McpServer, toToolText } from '@ferrlabs/mcp-core';
 import { fleetRequest, orgIdSchema } from '../api-base.js';
+import { effortSchema } from './model-choice.js';
 
 interface Agent {
   id: string;
@@ -105,6 +106,9 @@ export function registerAgentTools(server: McpServer) {
         .optional()
         .describe('Extra prompt appended to the base prompt'),
       model: z.string().min(1).max(100).optional().describe('Model id; omit for the CLI default'),
+      effort: effortSchema
+        .optional()
+        .describe('Default effort: low, medium, high, xhigh or max; omit for the CLI default'),
       working_dir: z
         .string()
         .min(1)
@@ -159,6 +163,12 @@ export function registerAgentTools(server: McpServer) {
         .max(100)
         .optional()
         .describe('Model id; an empty string restores the CLI default'),
+      effort: z
+        .union([effortSchema, z.literal('')])
+        .optional()
+        .describe(
+          'Default effort: low, medium, high, xhigh or max; an empty string clears it; omit to leave it unchanged',
+        ),
       working_dir: z.string().min(1).max(256).optional().describe('Working directory of the run'),
       description: z.string().max(500).optional().describe('Short description'),
       enabled: z.boolean().optional().describe('Whether the agent can be triggered'),

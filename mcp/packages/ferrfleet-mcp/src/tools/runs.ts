@@ -14,6 +14,11 @@ interface Run {
   repo: string | null;
   pr_number: number | null;
   queue_position: number | null;
+  model?: string | null;
+  effort?: string | null;
+  model_source?: string | null;
+  effort_source?: string | null;
+  choice_note?: string | null;
 }
 
 const RUN_STATUSES = [
@@ -31,7 +36,7 @@ const RUN_STATUSES = [
 export function registerRunTools(server: McpServer) {
   server.tool(
     'list_runs',
-    'List recent FerrFleet runs for the authenticated org (most recent first).',
+    'List recent FerrFleet runs for the authenticated org (most recent first). Each run carries the model and effort it ran with, model_source and effort_source (where each came from: input, step, triage or agent) and choice_note when a step choice could not be applied.',
     {
       limit: z
         .number()
@@ -58,7 +63,7 @@ export function registerRunTools(server: McpServer) {
 
   server.tool(
     'get_run',
-    'Get the metadata of a single FerrFleet run (status, timing, agent, trigger). Use get_run_transcript for the captured output.',
+    'Get the metadata of a single FerrFleet run (status, timing, agent, trigger, and the model and effort it ran with, with model_source, effort_source and choice_note explaining where they came from). Use get_run_transcript for the captured output.',
     {
       run_id: z.string().min(1).describe('Run id'),
       org_id: orgIdSchema,

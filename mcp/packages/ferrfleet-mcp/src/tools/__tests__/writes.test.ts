@@ -354,6 +354,48 @@ describe('ferrfleet tools', () => {
     expect(capabilities.safeParse(null).success).toBe(false);
   });
 
+  it('create_agent forwards effort and omits it when absent', async () => {
+    await handlers.get('create_agent')!({ id: 'bot', name: 'Bot', prompt: 'p', effort: 'xhigh' });
+    expect(lastCall().body).toEqual({ id: 'bot', name: 'Bot', prompt: 'p', effort: 'xhigh' });
+    mockFetch.mockClear();
+    await handlers.get('create_agent')!({ id: 'bot', name: 'Bot', prompt: 'p' });
+    expect(lastCall().body).not.toHaveProperty('effort');
+  });
+
+  it('update_agent sends effort, and an empty string to clear it', async () => {
+    await handlers.get('update_agent')!({ agent_id: 'a1', effort: 'max' });
+    expect(lastCall().body).toEqual({ effort: 'max' });
+    mockFetch.mockClear();
+    const result = await handlers.get('update_agent')!({ agent_id: 'a1', effort: '' });
+    expect(result).not.toMatchObject({ isError: true });
+    expect(lastCall().body).toEqual({ effort: '' });
+  });
+
+  it('update_agent omits effort when absent', async () => {
+    await handlers.get('update_agent')!({ agent_id: 'a1', enabled: true });
+    expect(lastCall().body).not.toHaveProperty('effort');
+  });
+
+  it('create_agent only accepts the five effort levels', () => {
+    const effort = schemas.get('create_agent')!.effort;
+    for (const level of ['low', 'medium', 'high', 'xhigh', 'max']) {
+      expect(effort.safeParse(level).success, level).toBe(true);
+    }
+    for (const bad of ['', 'HIGH', 'extreme', 'auto', 3, null]) {
+      expect(effort.safeParse(bad).success, String(bad)).toBe(false);
+    }
+  });
+
+  it('update_agent accepts the effort levels and an empty string only', () => {
+    const effort = schemas.get('update_agent')!.effort;
+    for (const ok of ['low', 'medium', 'high', 'xhigh', 'max', '', undefined]) {
+      expect(effort.safeParse(ok).success, String(ok)).toBe(true);
+    }
+    for (const bad of ['HIGH', 'extreme', 'auto', null]) {
+      expect(effort.safeParse(bad).success, String(bad)).toBe(false);
+    }
+  });
+
   it('update_agent patches the agent with only the fields given', async () => {
     await handlers.get('update_agent')!({ agent_id: 'a1', runner_mode: 'external' });
 
