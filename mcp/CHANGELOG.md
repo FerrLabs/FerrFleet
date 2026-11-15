@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.21.0] - 2026-11-15
+
+### Features
+
+- feat(mcp): support effort, step model choice and issue event rules (#46)
+
 ## [10.20.0] - 2026-11-15
 
 ### Features
