@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.20.0] - 2026-11-15
+
+### Features
+
+- feat(mcp): accept capabilities on create_agent and update_agent (#45)
+
 ## [10.19.0] - 2026-11-14
 
 ### Features
