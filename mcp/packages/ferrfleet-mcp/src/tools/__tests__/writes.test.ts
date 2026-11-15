@@ -298,7 +298,60 @@ describe('ferrfleet tools', () => {
     const keys = Object.keys(schemas.get('create_agent')!);
     expect(keys).not.toContain('runner_mode');
     expect(keys).not.toContain('enabled');
-    expect(keys).not.toContain('options');
+  });
+
+  it('create_agent forwards options and capabilities unchanged', async () => {
+    const options = { max_turns: 5 };
+    const capabilities = ['code_review', 'review_followup'];
+    await handlers.get('create_agent')!({
+      id: 'bot',
+      name: 'Bot',
+      prompt: 'p',
+      options,
+      capabilities,
+    });
+    expect(lastCall().body).toEqual({ id: 'bot', name: 'Bot', prompt: 'p', options, capabilities });
+  });
+
+  it('create_agent sends an empty capability list instead of dropping it', async () => {
+    await handlers.get('create_agent')!({ id: 'bot', name: 'Bot', prompt: 'p', capabilities: [] });
+    expect(lastCall().body).toEqual({ id: 'bot', name: 'Bot', prompt: 'p', capabilities: [] });
+  });
+
+  it('update_agent patches capabilities alone', async () => {
+    await handlers.get('update_agent')!({ agent_id: 'a1', capabilities: ['debug_action'] });
+    expect(lastCall().body).toEqual({ capabilities: ['debug_action'] });
+  });
+
+  it('update_agent sends an empty capability list as a real change', async () => {
+    const result = await handlers.get('update_agent')!({ agent_id: 'a1', capabilities: [] });
+    expect(result).not.toMatchObject({ isError: true });
+    expect(lastCall().body).toEqual({ capabilities: [] });
+  });
+
+  it('update_agent omits capabilities when absent', async () => {
+    await handlers.get('update_agent')!({ agent_id: 'a1', enabled: true });
+    expect(lastCall().body).toEqual({ enabled: true });
+  });
+
+  it.each(['create_agent', 'update_agent'])('%s only accepts known capabilities', (tool) => {
+    const capabilities = schemas.get(tool)!.capabilities;
+    for (const value of [
+      'code_review',
+      'debug_action',
+      'ticket_implementation',
+      'review_response',
+      'review_followup',
+    ]) {
+      expect(capabilities.safeParse([value]).success, value).toBe(true);
+    }
+    expect(capabilities.safeParse([]).success).toBe(true);
+    expect(capabilities.safeParse(undefined).success).toBe(true);
+    expect(capabilities.safeParse(['deploy']).success).toBe(false);
+    expect(capabilities.safeParse(['Code_Review']).success).toBe(false);
+    expect(capabilities.safeParse(['code_review', 'deploy']).success).toBe(false);
+    expect(capabilities.safeParse('code_review').success).toBe(false);
+    expect(capabilities.safeParse(null).success).toBe(false);
   });
 
   it('update_agent patches the agent with only the fields given', async () => {

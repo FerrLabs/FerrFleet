@@ -13,6 +13,13 @@ interface Agent {
 }
 
 const RUNNER_MODES = ['managed', 'external'] as const;
+const AGENT_CAPABILITIES = [
+  'code_review',
+  'debug_action',
+  'ticket_implementation',
+  'review_response',
+  'review_followup',
+] as const;
 export const AGENT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$/;
 
 export function registerAgentTools(server: McpServer) {
@@ -83,7 +90,7 @@ export function registerAgentTools(server: McpServer) {
 
   server.tool(
     'create_agent',
-    'Create a FerrFleet agent in the organization. The agent starts with default options and runner_mode=managed; use update_agent to change those or to set enabled.',
+    'Create a FerrFleet agent in the organization. The agent starts with default options unless you pass options, and runner_mode=managed; use update_agent to change runner_mode or to set enabled.',
     {
       id: z
         .string()
@@ -111,6 +118,11 @@ export function registerAgentTools(server: McpServer) {
         .max(2048)
         .optional()
         .describe('Webhook notified when a run finishes'),
+      options: z.record(z.string(), z.unknown()).optional().describe('Agent options object'),
+      capabilities: z
+        .array(z.enum(AGENT_CAPABILITIES))
+        .optional()
+        .describe('Capabilities the agent can be assigned; duplicates are removed'),
     },
     async ({ org_id, ...fields }) => {
       const body = Object.fromEntries(
@@ -160,6 +172,12 @@ export function registerAgentTools(server: McpServer) {
         .record(z.string(), z.unknown())
         .optional()
         .describe('Replaces the whole options object; it is not merged with the existing one'),
+      capabilities: z
+        .array(z.enum(AGENT_CAPABILITIES))
+        .optional()
+        .describe(
+          'Replaces the whole capability list, it is not merged with the existing one; [] clears it; omit to leave it unchanged; duplicates are removed',
+        ),
       runner_mode: z
         .enum(RUNNER_MODES)
         .optional()
