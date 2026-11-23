@@ -479,24 +479,24 @@ describe('ferrfleet tools', () => {
 
   it('bind_repo upserts the binding with the repository and agent', async () => {
     await handlers.get('bind_repo')!({
-      repo_full_name: 'IdleWarden/idlewarden',
+      repo_full_name: 'acme/widgets',
       agent_id: 'pr-review',
     });
 
     const call = lastCall();
     expect(call.url).toBe(`${FLEET}/repos/bindings`);
     expect(call.method).toBe('POST');
-    expect(call.body).toEqual({ repo_full_name: 'IdleWarden/idlewarden', agent_id: 'pr-review' });
+    expect(call.body).toEqual({ repo_full_name: 'acme/widgets', agent_id: 'pr-review' });
   });
 
   it('bind_repo keeps enabled=false so a binding can be switched off', async () => {
     await handlers.get('bind_repo')!({
-      repo_full_name: 'IdleWarden/idlewarden',
+      repo_full_name: 'acme/widgets',
       agent_id: 'pr-review',
       enabled: false,
     });
     expect(lastCall().body).toEqual({
-      repo_full_name: 'IdleWarden/idlewarden',
+      repo_full_name: 'acme/widgets',
       agent_id: 'pr-review',
       enabled: false,
     });
@@ -504,8 +504,8 @@ describe('ferrfleet tools', () => {
 
   it('bind_repo only accepts owner/name repositories', () => {
     const repo = schemas.get('bind_repo')!.repo_full_name;
-    expect(repo.safeParse('IdleWarden/idlewarden').success).toBe(true);
-    expect(repo.safeParse('idlewarden').success).toBe(false);
+    expect(repo.safeParse('acme/widgets').success).toBe(true);
+    expect(repo.safeParse('widgets').success).toBe(false);
     expect(repo.safeParse('a/b/c').success).toBe(false);
     expect(repo.safeParse('../agents').success).toBe(false);
   });
