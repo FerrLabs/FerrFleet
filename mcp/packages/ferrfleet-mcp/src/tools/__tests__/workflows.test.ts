@@ -295,6 +295,54 @@ describe('workflow and event rule tools', () => {
         expect(lastCall().body).toMatchObject({ outputs: [output] });
       });
 
+      describe('ferrtrack_ticket projects allowlist', () => {
+        const ticketOutput = { ...issueOutput, kind: 'ferrtrack_ticket', project: 'ferrlabs' };
+        const withProjects = (projects: unknown, base: object = ticketOutput) => [
+          { ...base, projects },
+        ];
+
+        it('accepts slugs on a ferrtrack_ticket output in create and update', () => {
+          for (const tool of ['create_workflow', 'update_workflow']) {
+            expect(accepts(tool, 'outputs', withProjects(['ui', 'ferr-kit', 'p2']))).toBe(true);
+            expect(accepts(tool, 'outputs', withProjects([]))).toBe(true);
+          }
+          expect(accepts('create_workflow', 'outputs', [ticketOutput])).toBe(true);
+        });
+
+        it('refuses a malformed slug', () => {
+          for (const slug of ['UI', 'a b', '-ui', 'ui-', 'a--b', 'a_b', '', 'a'.repeat(41), 3]) {
+            expect(accepts('create_workflow', 'outputs', withProjects([slug])), String(slug)).toBe(
+              false,
+            );
+          }
+        });
+
+        it('accepts a 40 character slug', () => {
+          expect(accepts('create_workflow', 'outputs', withProjects(['a'.repeat(40)]))).toBe(true);
+        });
+
+        it('refuses duplicates and more than 20 slugs', () => {
+          expect(accepts('create_workflow', 'outputs', withProjects(['ui', 'ui']))).toBe(false);
+          const slugs = Array.from({ length: 21 }, (_, i) => `p${i}`);
+          expect(accepts('create_workflow', 'outputs', withProjects(slugs))).toBe(false);
+          expect(accepts('create_workflow', 'outputs', withProjects(slugs.slice(0, 20)))).toBe(
+            true,
+          );
+        });
+
+        it('refuses projects on any other output kind', () => {
+          expect(accepts('create_workflow', 'outputs', withProjects(['ui'], issueOutput))).toBe(
+            false,
+          );
+        });
+
+        it('create_workflow posts the allowlist unchanged', async () => {
+          const output = { ...ticketOutput, projects: ['ui', 'kit'] };
+          await handlers.get('create_workflow')!({ name: 'wf', steps: [step], outputs: [output] });
+          expect(lastCall().body).toMatchObject({ outputs: [output] });
+        });
+      });
+
       it('caps entries and outputs at 10', () => {
         const entries = Array.from({ length: 11 }, (_, i) => ({ ...cronEntry, id: `e${i}` }));
         const outputs = Array.from({ length: 11 }, (_, i) => ({ ...issueOutput, id: `o${i}` }));
