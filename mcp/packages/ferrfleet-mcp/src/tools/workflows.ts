@@ -13,6 +13,7 @@ const OUTPUT_KINDS = [
   'github_review',
   'github_issue',
   'ferrtrack_ticket',
+  'ferrtrack_comment',
   'webhook',
 ] as const;
 
@@ -100,7 +101,7 @@ const outputSchema = z.strictObject({
   connector_id: z
     .string()
     .optional()
-    .describe('Connector of the matching type, from list_connectors (github_*, ferrtrack_ticket)'),
+    .describe('Connector of the matching type, from list_connectors (github_*, ferrtrack_*)'),
   url: z.string().optional().describe('Target url for a webhook output'),
   project: z.string().optional().describe('Project slug for a ferrtrack_ticket output'),
   repo: z.string().optional().describe('owner/name repository for a github output'),
