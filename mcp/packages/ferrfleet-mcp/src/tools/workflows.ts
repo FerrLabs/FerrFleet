@@ -108,15 +108,17 @@ const outputSchema = z.strictObject({
   position: positionSchema,
 });
 
+const MAX_STEPS = 100;
+
 const workflowFields = {
   name: z.string().trim().min(1).max(100).describe('Workflow name'),
   enabled: z.boolean().optional().describe('Whether the workflow can run; defaults to true'),
   steps: z
     .array(stepSchema)
     .min(1)
-    .max(20)
+    .max(MAX_STEPS)
     .describe(
-      'One to 20 steps forming an acyclic graph with at least one root. Two steps on the same agent must be ordered with needs',
+      `One to ${MAX_STEPS} steps forming an acyclic graph with at least one root. Two steps on the same agent must be ordered with needs`,
     ),
 };
 
