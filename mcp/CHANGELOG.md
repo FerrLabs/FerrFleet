@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.24.0] - 2026-11-27
+
+### Features
+
+- feat(mcp): accept up to 100 workflow steps (#64)
+
 ## [10.23.0] - 2026-11-27
 
 ### Features
