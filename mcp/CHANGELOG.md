@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.22.1] - 2026-11-27
+
+### Bug Fixes
+
+- fix(docker): install corepack explicitly, node 26 no longer ships it (#61)
+
 ## [10.22.0] - 2026-11-27
 
 ### Features
