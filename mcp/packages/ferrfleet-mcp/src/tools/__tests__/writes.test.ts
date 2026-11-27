@@ -607,6 +607,59 @@ describe('ferrfleet tools', () => {
     expect(lastCall().url).toBe(`${FLEET}/agents/..%2Fruns`);
   });
 
+  describe('delete_agent', () => {
+    const refuse = (status: number, body?: unknown) =>
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status,
+        text: () => Promise.resolve(body === undefined ? '' : JSON.stringify(body)),
+      } as unknown as Response);
+
+    it('sends DELETE with the escaped id and reports it on 204', async () => {
+      mockFetch.mockResolvedValue({ ok: true, status: 204, text: () => Promise.resolve('') });
+      const result = await handlers.get('delete_agent')!({ agent_id: '../runs' });
+      expect(lastCall().url).toBe(`${FLEET}/agents/..%2Fruns`);
+      expect(lastCall().method).toBe('DELETE');
+      expect(result.isError).toBeUndefined();
+      expect(JSON.parse(result.content[0].text!)).toEqual({ deleted: '../runs' });
+    });
+
+    it('names the workflow when a workflow step uses the agent', async () => {
+      refuse(409, {
+        error: 'the workflow `Nightly review` has a step that uses this agent',
+        code: 'agent_in_use',
+      });
+      const result = await handlers.get('delete_agent')!({ agent_id: 'a1' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Nightly review');
+      expect(result.content[0].text).toContain('Remove that step');
+    });
+
+    it('points at update_agent when another resource still references the agent', async () => {
+      refuse(409);
+      const result = await handlers.get('delete_agent')!({ agent_id: 'a1' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('enabled: false');
+      expect(result.content[0].text).not.toContain('workflow');
+    });
+
+    it('reports an unknown agent', async () => {
+      refuse(404);
+      const result = await handlers.get('delete_agent')!({ agent_id: 'nope' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toBe('Agent not found.');
+    });
+
+    it('lets any other failure through instead of hiding it', async () => {
+      refuse(500, { error: 'boom' });
+      await expect(handlers.get('delete_agent')!({ agent_id: 'a1' })).rejects.toThrow('boom');
+    });
+
+    it('requires a non-empty agent_id', () => {
+      expect(schemas.get('delete_agent')!.agent_id.safeParse('').success).toBe(false);
+    });
+  });
+
   it('list_marketplace_agents reads the catalog and returns it unchanged', async () => {
     const templates = [{ id: 'pr-review', name: 'PR review', imported: false }];
     mockFetch.mockResolvedValue(ok(templates));
@@ -734,6 +787,7 @@ describe('ferrfleet tools', () => {
       ['trigger_agent_run', { agent_id: 'a1' }],
       ['create_agent', { id: 'bot', name: 'Bot', prompt: 'Go' }],
       ['update_agent', { agent_id: 'a1', enabled: true }],
+      ['delete_agent', { agent_id: 'a1' }],
       ['list_runner_pools', {}],
       ['list_marketplace_agents', {}],
       ['import_marketplace_agent', { template_id: 't1' }],

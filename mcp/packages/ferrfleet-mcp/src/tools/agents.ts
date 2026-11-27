@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { getToken, type McpServer, toToolText } from '@ferrlabs/mcp-core';
+import { ApiRequestError, getToken, type McpServer, toToolText } from '@ferrlabs/mcp-core';
 import { fleetRequest, orgIdSchema } from '../api-base.js';
 import { effortSchema } from './model-choice.js';
+import { reply } from './reply.js';
 
 interface Agent {
   id: string;
@@ -22,6 +23,16 @@ const AGENT_CAPABILITIES = [
   'review_followup',
 ] as const;
 export const AGENT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$/;
+
+function deleteRefusal(error: unknown): string | undefined {
+  if (!(error instanceof ApiRequestError)) return undefined;
+  if (error.status === 404) return 'Agent not found.';
+  if (error.status !== 409) return undefined;
+  if (error.code === 'agent_in_use') {
+    return `${error.message}. Remove that step from the workflow first, then delete the agent.`;
+  }
+  return 'The agent is still referenced by another resource (such as an event rule) and cannot be deleted. Change or delete that resource first, or disable the agent with update_agent and enabled: false.';
+}
 
 export function registerAgentTools(server: McpServer) {
   server.tool(
@@ -222,6 +233,27 @@ export function registerAgentTools(server: McpServer) {
       return {
         content: [{ type: 'text' as const, text: toToolText(agent) }],
       };
+    },
+  );
+
+  server.tool(
+    'delete_agent',
+    "Delete a FerrFleet agent. Irreversible: the agent's runs and transcripts, schedules, skills, repository bindings and connector attachments are deleted with it (the connectors and repositories themselves stay). Refused with agent_in_use while a workflow step uses the agent (remove the step first), and refused while an event rule names it. To stop an agent without deleting it, use update_agent with enabled: false.",
+    { agent_id: z.string().min(1).describe('Agent id'), org_id: orgIdSchema },
+    async ({ agent_id, org_id }) => {
+      const token = await getToken();
+      try {
+        await fleetRequest(`/agents/${encodeURIComponent(agent_id)}`, {
+          token,
+          orgId: org_id,
+          method: 'DELETE',
+        });
+      } catch (error) {
+        const refusal = deleteRefusal(error);
+        if (refusal === undefined) throw error;
+        return { isError: true, content: [{ type: 'text' as const, text: refusal }] };
+      }
+      return reply({ deleted: agent_id });
     },
   );
 }
