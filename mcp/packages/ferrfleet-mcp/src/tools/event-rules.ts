@@ -11,7 +11,7 @@ const EVENT_KINDS = [
   'issue_labeled',
   'issue_commented',
 ] as const;
-const ISSUE_KINDS: readonly string[] = ['issue_labeled', 'issue_commented'];
+const ISSUE_KINDS: ReadonlySet<string> = new Set(['issue_labeled', 'issue_commented']);
 const UPDATE_TYPES = ['patch', 'minor', 'major'] as const;
 const DEDUP_MODES = ['head_commit', 'none'] as const;
 
@@ -92,7 +92,7 @@ const issueRunError = (
   conditions: z.infer<typeof conditionsSchema> | undefined,
   outcome: z.infer<typeof outcomeSchema>,
 ) =>
-  outcome.action === 'run' && conditions?.kinds?.some((kind) => ISSUE_KINDS.includes(kind))
+  outcome.action === 'run' && conditions?.kinds?.some((kind) => ISSUE_KINDS.has(kind))
     ? {
         isError: true,
         content: [
