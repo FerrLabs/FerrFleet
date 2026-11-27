@@ -1,26 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { ZodTypeAny } from 'zod';
-import type { McpServer } from '@ferrlabs/mcp-core';
+import {
+  handlers,
+  schemas,
+  mockServer,
+  mockFetch,
+  lastCall as lastRecordedCall,
+  headersAt,
+} from './helpers.js';
 
-process.env.FERRLABS_API_TOKEN = 'test-token';
-
-type Handler = (
-  params: Record<string, unknown>,
-) => Promise<{ isError?: boolean; content: { text?: string }[] }>;
-
-const handlers = new Map<string, Handler>();
-const schemas = new Map<string, Record<string, ZodTypeAny>>();
-const mockServer = {
-  tool: vi.fn(
-    (name: string, _desc: string, schema: Record<string, ZodTypeAny>, handler: Handler) => {
-      handlers.set(name, handler);
-      schemas.set(name, schema);
-    },
-  ),
-} as unknown as McpServer;
-
-const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
+const lastCall = () => ({ ...lastRecordedCall(), headers: headersAt(0) });
 
 function ok(body: unknown = { id: 'run-1', status: 'queued' }): Response {
   return {
@@ -29,21 +17,6 @@ function ok(body: unknown = { id: 'run-1', status: 'queued' }): Response {
     text: () => Promise.resolve(JSON.stringify(body)),
     json: () => Promise.resolve(body),
   } as unknown as Response;
-}
-
-function lastCall(): {
-  url: string;
-  method: string;
-  body: unknown;
-  headers: Record<string, string>;
-} {
-  const [url, init] = mockFetch.mock.calls[0];
-  return {
-    url: String(url),
-    method: init.method ?? 'GET',
-    body: init.body ? JSON.parse(init.body) : undefined,
-    headers: init.headers as Record<string, string>,
-  };
 }
 
 const FLEET = 'https://api.ferrfleet.com';

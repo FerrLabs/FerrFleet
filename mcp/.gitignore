@@ -3,3 +3,4 @@ dist/
 coverage/
 .env
 *.local
+!scripts/__tests__/fixtures/root/packages/stub/dist/
