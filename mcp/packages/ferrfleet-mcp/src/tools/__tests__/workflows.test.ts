@@ -221,6 +221,18 @@ describe('workflow and event rule tools', () => {
         expect(accepts('update_workflow', 'outputs', [issueOutput])).toBe(true);
       });
 
+      it('accepts a ferrtrack_comment output on create and update', () => {
+        const comment = {
+          id: 'note',
+          from: 'review',
+          kind: 'ferrtrack_comment',
+          connector_id: 'conn-2',
+          position: { x: 5, y: 5 },
+        };
+        expect(accepts('create_workflow', 'outputs', [comment])).toBe(true);
+        expect(accepts('update_workflow', 'outputs', [comment])).toBe(true);
+      });
+
       it('tolerates next_run_at on an entry and drops it from the parsed value', () => {
         const parsed = field('update_workflow', 'entries').safeParse([
           { ...cronEntry, next_run_at: '2026-11-16T06:00:00Z' },
