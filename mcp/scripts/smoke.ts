@@ -13,9 +13,9 @@ const SERVERS: Target[] = [
   },
 ];
 
-runSmoke(root, SERVERS)
-  .then((code) => process.exit(code))
-  .catch((err: unknown) => {
-    console.error('Smoke aborted:', err instanceof Error ? err.message : err);
-    process.exit(1);
-  });
+try {
+  process.exit(await runSmoke(root, SERVERS));
+} catch (err: unknown) {
+  console.error('Smoke aborted:', err instanceof Error ? err.message : err);
+  process.exit(1);
+}
