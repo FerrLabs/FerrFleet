@@ -4,6 +4,12 @@ All notable changes to `ferrfleet-mcp` will be documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [10.23.0] - 2026-11-27
+
+### Features
+
+- feat(mcp): accept the ferrtrack_comment workflow output kind (#63)
+
 ## [10.22.1] - 2026-11-27
 
 ### Bug Fixes
