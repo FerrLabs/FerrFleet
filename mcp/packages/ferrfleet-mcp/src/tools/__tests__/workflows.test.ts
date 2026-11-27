@@ -491,10 +491,10 @@ describe('workflow and event rule tools', () => {
         expect(parse({ ...step, input: 'x' })).toBe(false);
       });
 
-      it('bounds the step count to 1..20', () => {
+      it('bounds the step count to 1..100', () => {
         const many = (n: number) => Array.from({ length: n }, (_, i) => ({ ...step, id: `s${i}` }));
-        expect(steps().safeParse(many(20)).success).toBe(true);
-        expect(steps().safeParse(many(21)).success).toBe(false);
+        expect(steps().safeParse(many(100)).success).toBe(true);
+        expect(steps().safeParse(many(101)).success).toBe(false);
         expect(steps().safeParse([]).success).toBe(false);
       });
     });
