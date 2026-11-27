@@ -4,12 +4,13 @@ FROM node:26-alpine AS build
 ARG PACKAGE
 WORKDIR /app
 ENV HUSKY=0 \
-    CI=true
-RUN corepack enable
+    CI=true \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN npm install -g corepack@0.36.0 && corepack enable
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 RUN pnpm fetch
 COPY packages packages
-RUN pnpm install --frozen-lockfile --offline
+RUN pnpm install --frozen-lockfile
 RUN pnpm run build
 RUN pnpm --filter "${PACKAGE}" deploy --prod --legacy /out
 
