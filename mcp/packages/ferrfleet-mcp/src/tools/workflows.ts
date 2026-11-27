@@ -17,6 +17,12 @@ const OUTPUT_KINDS = [
   'webhook',
 ] as const;
 
+const PROJECT_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+const MAX_PROJECT_SLUG = 40;
+
+const MAX_OUTPUT_PROJECTS = 20;
+
 const STEP_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 const stepSchema = z.strictObject({
@@ -84,29 +90,46 @@ const entrySchema = z
   })
   .transform(({ next_run_at: _nextRunAt, ...entry }) => entry);
 
-const outputSchema = z.strictObject({
-  id: z
-    .string()
-    .min(1)
-    .describe('Output id, unique among the steps, entries and outputs of the workflow'),
-  from: z
-    .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
-    .refine((from) => typeof from === 'string' || new Set(from).size === from.length, {
-      message: 'Step ids must be unique',
-    })
-    .describe(
-      'Id of the step whose result is delivered, or a non-empty list of distinct step ids: the output waits for all of them, ignores skipped ones and delivers the last listed step that completed with a body',
-    ),
-  kind: z.enum(OUTPUT_KINDS).describe('Where the result goes'),
-  connector_id: z
-    .string()
-    .optional()
-    .describe('Connector of the matching type, from list_connectors (github_*, ferrtrack_*)'),
-  url: z.string().optional().describe('Target url for a webhook output'),
-  project: z.string().optional().describe('Project slug for a ferrtrack_ticket output'),
-  repo: z.string().optional().describe('owner/name repository for a github output'),
-  position: positionSchema,
-});
+const projectsSchema = z
+  .array(z.string().max(MAX_PROJECT_SLUG).regex(PROJECT_SLUG_PATTERN))
+  .max(MAX_OUTPUT_PROJECTS)
+  .refine((projects) => new Set(projects).size === projects.length, {
+    message: 'Project slugs must be unique',
+  });
+
+const outputSchema = z
+  .strictObject({
+    id: z
+      .string()
+      .min(1)
+      .describe('Output id, unique among the steps, entries and outputs of the workflow'),
+    from: z
+      .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
+      .refine((from) => typeof from === 'string' || new Set(from).size === from.length, {
+        message: 'Step ids must be unique',
+      })
+      .describe(
+        'Id of the step whose result is delivered, or a non-empty list of distinct step ids: the output waits for all of them, ignores skipped ones and delivers the last listed step that completed with a body',
+      ),
+    kind: z.enum(OUTPUT_KINDS).describe('Where the result goes'),
+    connector_id: z
+      .string()
+      .optional()
+      .describe('Connector of the matching type, from list_connectors (github_*, ferrtrack_*)'),
+    url: z.string().optional().describe('Target url for a webhook output'),
+    project: z.string().optional().describe('Project slug for a ferrtrack_ticket output'),
+    projects: projectsSchema
+      .optional()
+      .describe(
+        'ferrtrack_ticket only: up to 20 distinct project slugs besides project that the items of the result may set as their own project; an item naming another project is refused',
+      ),
+    repo: z.string().optional().describe('owner/name repository for a github output'),
+    position: positionSchema,
+  })
+  .refine((output) => output.projects === undefined || output.kind === 'ferrtrack_ticket', {
+    message: 'projects only applies to a ferrtrack_ticket output',
+    path: ['projects'],
+  });
 
 const MAX_STEPS = 100;
 
